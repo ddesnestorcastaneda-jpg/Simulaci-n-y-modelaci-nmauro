@@ -49,6 +49,10 @@ default_keys = {
     "diagnostico_equipo": "",
     "recomendaciones_equipo": "",
     "tipo_g1": "Barras Simples",
+    # Nuevas variables del Bloque 4
+    "tiempo_simulacion": 28800,
+    "tiempo_warmup": 0,
+    "analisis_simulacion": "",
     # Nuevas llaves para la valoración del aprendizaje
     "eval_matematica": 3,
     "eval_flexsim": 3,
@@ -458,13 +462,46 @@ st.markdown("---")
 # BLOQUE 4: SIMULACIÓN Y EVIDENCIAS
 # ------------------------------------------------------------------------------
 st.header("🎬 Bloque 4: Simulación y Evidencias de Ejecución (FlexSim)")
+st.markdown("Registre los parámetros de la corrida de simulación y cargue las evidencias visuales del modelo en funcionamiento.")
+
+# 4.1 Parámetros de corrida
+st.subheader("4.1 Parámetros de la Corrida")
+col_run1, col_run2 = st.columns(2)
+with col_run1:
+    tiempo_simulacion = st.number_input(
+        "Tiempo Total de Simulación (ej. 28800 segundos para 8 horas):", 
+        min_value=0, 
+        value=int(st.session_state.get("tiempo_simulacion", 28800)), 
+        key="tiempo_simulacion"
+    )
+with col_run2:
+    tiempo_warmup = st.number_input(
+        "Tiempo de Calentamiento (Warm-up en segundos):", 
+        min_value=0, 
+        value=int(st.session_state.get("tiempo_warmup", 0)), 
+        key="tiempo_warmup"
+    )
+
+# 4.2 Evidencias Visuales
+st.subheader("4.2 Evidencias Visuales y Dashboard")
 col_s1, col_s2 = st.columns(2)
 with col_s1:
     imagen_sim_corrida = st.file_uploader("🖼️ Pantallazo de Simulación Ejecutándose:", type=["png", "jpg", "jpeg"], key="up_sim_corrida")
-    if imagen_sim_corrida: st.image(imagen_sim_corrida, use_container_width=True)
+    if imagen_sim_corrida: 
+        st.image(imagen_sim_corrida, caption="Modelo de FlexSim en ejecución", use_container_width=True)
 with col_s2:
     imagen_dashboard_kpi = st.file_uploader("🖼️ Pantallazo del Dashboard de KPIs:", type=["png", "jpg", "jpeg"], key="up_dash_kpi")
-    if imagen_dashboard_kpi: st.image(imagen_dashboard_kpi, use_container_width=True)
+    if imagen_dashboard_kpi: 
+        st.image(imagen_dashboard_kpi, caption="Dashboard de Resultados", use_container_width=True)
+
+# 4.3 Análisis de Resultados
+st.subheader("4.3 Análisis de Resultados en FlexSim")
+analisis_simulacion = st.text_area(
+    "Describa los principales hallazgos observados en el dashboard (ej. cuellos de botella confirmados, saturación de servidores, colas máximas observadas):",
+    value=st.session_state.get("analisis_simulacion", ""),
+    height=150,
+    key="analisis_simulacion"
+)
 st.markdown("---")
 
 # ------------------------------------------------------------------------------
@@ -579,6 +616,10 @@ datos_a_guardar = {
     "diagnostico_equipo": st.session_state.get("diagnostico_equipo", ""),
     "recomendaciones_equipo": st.session_state.get("recomendaciones_equipo", ""),
     "tipo_g1": st.session_state.get("tipo_g1", "Barras Simples"),
+    # Nuevas variables del Bloque 4
+    "tiempo_simulacion": st.session_state.get("tiempo_simulacion", 28800),
+    "tiempo_warmup": st.session_state.get("tiempo_warmup", 0),
+    "analisis_simulacion": st.session_state.get("analisis_simulacion", ""),
     # Guardar respuestas del Bloque 6
     "eval_matematica": st.session_state.get("eval_matematica", 3),
     "eval_flexsim": st.session_state.get("eval_flexsim", 3),
@@ -717,6 +758,15 @@ def generar_word():
     doc.add_heading('3. Ejecución de la Simulación y Triangulación de Resultados', level=1)
     
     doc.add_paragraph("Durante la corrida del modelo computacional, se extrajeron evidencias gráficas del comportamiento dinámico de las entidades y de los tableros de control.")
+    
+    # Parámetros y Análisis incorporados en el Word
+    doc.add_paragraph(f"Tiempo total de simulación: {st.session_state.get('tiempo_simulacion', 28800)} segundos.")
+    doc.add_paragraph(f"Tiempo de calentamiento (Warm-up): {st.session_state.get('tiempo_warmup', 0)} segundos.")
+    
+    p_sim_an = doc.add_paragraph()
+    p_sim_an.add_run("\nAnálisis de Resultados de Simulación: ").bold = True
+    p_sim_an.add_run(st.session_state.get("analisis_simulacion", "No se registraron observaciones."))
+
     if imagen_sim_corrida:
         imagen_sim_corrida.seek(0)
         doc.add_picture(imagen_sim_corrida, width=Inches(5))
@@ -740,7 +790,7 @@ def generar_word():
     p_rec.add_run("\nRecomendaciones de Mejora Continua: ").bold = True
     p_rec.add_run(recomendaciones_equipo if recomendaciones_equipo else "No se registraron propuestas.")
 
-    # SECCIÓN 5: VALORACIÓN DEL APRENDIZAJE (NUEVO EN WORD)
+    # SECCIÓN 5: VALORACIÓN DEL APRENDIZAJE
     doc.add_page_break()
     doc.add_heading('5. Valoración del Aprendizaje y Autoevaluación de Competencias', level=1)
     doc.add_paragraph("A continuación, se consolidan las calificaciones obtenidas por el equipo consultor en la autoevaluación de competencias desarrolladas durante el proyecto:")
