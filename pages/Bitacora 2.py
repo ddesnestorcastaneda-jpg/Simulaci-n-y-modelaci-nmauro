@@ -226,9 +226,9 @@ else:
 st.markdown("---")
 
 # ------------------------------------------------------------------------------
-# PASO 2.2: ANÁLISIS DE DEMANDA POR TIPO DE TRÁMITE Y PARETO
+# PASO 2.2: ANÁLISIS DE DEMANDA POR TIPO DE TRÁMITE Y COMPARATIVO DE PARETOS
 # ------------------------------------------------------------------------------
-st.subheader("Paso 2.2: Demanda y Análisis Pareto por Tipo de Trámite")
+st.subheader("Paso 2.2: Demanda y Análisis Pareto por Tipo de Trámite (Volumen vs Carga de Trabajo)")
 
 df_arribos_init = pd.DataFrame({
     "Franja_Horaria": ["8:00 - 9:00", "9:00 - 10:00", "10:00 - 11:00", "11:00 - 12:00", "12:00 - 13:00", "13:00 - 14:00"],
@@ -241,39 +241,50 @@ df_a_valid = df_arribos[df_arribos['Franja_Horaria'] != ""].copy()
 total_clientes_dia = df_a_valid['Clientes_Hora_Lambda'].sum() if not df_a_valid.empty else 0
 
 buf_fig_pareto_tramites = None
+buf_fig_pareto_tiempo = None
 buf_fig_tramite_hora = None
 
 col_p1, col_p2 = st.columns([1.3, 1])
 
 with col_p1:
     if not df_t_valid.empty and total_clientes_dia > 0:
-        # Calcular total de personas por trámite al día
+        # 1. Datos para Pareto por Volumen de Clientes
         df_demanda_tramites = df_t_valid.copy()
         df_demanda_tramites['Clientes_Dia'] = (df_demanda_tramites['Mezcla_Pct'] / 100.0) * total_clientes_dia
-        df_demanda_tramites = df_demanda_tramites.sort_values(by='Clientes_Dia', ascending=False).reset_index(drop=True)
-        df_demanda_tramites['Acumulado_Pct'] = (df_demanda_tramites['Clientes_Dia'].cumsum() / df_demanda_tramites['Clientes_Dia'].sum()) * 100.0
+        df_demanda_vol = df_demanda_tramites.sort_values(by='Clientes_Dia', ascending=False).reset_index(drop=True)
+        df_demanda_vol['Acumulado_Pct'] = (df_demanda_vol['Clientes_Dia'].cumsum() / df_demanda_vol['Clientes_Dia'].sum()) * 100.0
 
-        tab_p_dia, tab_p_hora = st.tabs(["📊 Pareto General de Trámites (Día)", "🕒 Demanda de Trámites por Hora"])
+        # 2. Datos para Pareto por Carga de Tiempo de Atención Total
+        df_demanda_tramites['Tiempo_Total_Dia_Seg'] = df_demanda_tramites['Clientes_Dia'] * df_demanda_tramites['Tiempo_Atencion_Seg']
+        df_demanda_tiempo = df_demanda_tramites.sort_values(by='Tiempo_Total_Dia_Seg', ascending=False).reset_index(drop=True)
+        df_demanda_tiempo['Acumulado_Pct_Tiempo'] = (df_demanda_tiempo['Tiempo_Total_Dia_Seg'].cumsum() / df_demanda_tiempo['Tiempo_Total_Dia_Seg'].sum()) * 100.0
 
+        tab_p_dia, tab_p_tiempo, tab_p_hora = st.tabs([
+            "📊 Pareto Volumen Clientes (Cortos)", 
+            "⏳ Pareto Carga de Tiempo (Largos)", 
+            "🕒 Trámites por Hora"
+        ])
+
+        # TAB 1: PARETO VOLUMEN
         with tab_p_dia:
             fig_pt, ax_pt1 = plt.subplots(figsize=(5.5, 3.8))
-            bars_pt = ax_pt1.bar(df_demanda_tramites['Tipo_Tramite'], df_demanda_tramites['Clientes_Dia'], color='teal', alpha=0.8, width=0.4)
+            bars_pt = ax_pt1.bar(df_demanda_vol['Tipo_Tramite'], df_demanda_vol['Clientes_Dia'], color='teal', alpha=0.8, width=0.4)
 
             for bar in bars_pt:
                 yval = bar.get_height()
-                ax_pt1.text(bar.get_x() + bar.get_width()/2, yval + (df_demanda_tramites['Clientes_Dia'].max() * 0.02), f"{yval:.0f} pers", ha='center', va='bottom', fontsize=8, fontweight='bold')
+                ax_pt1.text(bar.get_x() + bar.get_width()/2, yval + (df_demanda_vol['Clientes_Dia'].max() * 0.02), f"{yval:.0f} pers", ha='center', va='bottom', fontsize=8, fontweight='bold')
 
             ax_pt1.set_ylabel('Total Clientes / Día', fontweight='bold', color='teal')
             ax_pt1.tick_params(axis='y', labelcolor='teal')
 
             ax_pt2 = ax_pt1.twinx()
-            ax_pt2.plot(df_demanda_tramites['Tipo_Tramite'], df_demanda_tramites['Acumulado_Pct'], color='crimson', marker='D', ms=5, linewidth=2)
+            ax_pt2.plot(df_demanda_vol['Tipo_Tramite'], df_demanda_vol['Acumulado_Pct'], color='crimson', marker='D', ms=5, linewidth=2)
             ax_pt2.set_ylabel('% Acumulado Personas', fontweight='bold', color='crimson')
             ax_pt2.tick_params(axis='y', labelcolor='crimson')
             ax_pt2.set_ylim(0, 115)
             ax_pt2.axhline(80, color='gray', linestyle='--', alpha=0.7)
 
-            plt.title(f"Pareto de Personas por Tipo de Trámite (Total: {total_clientes_dia} personas/día)", fontsize=9, fontweight='bold')
+            plt.title(f"Pareto por Volumen de Personas (Saturación de Sala)", fontsize=8.5, fontweight='bold')
             fig_pt.tight_layout()
             st.pyplot(fig_pt)
 
@@ -281,8 +292,37 @@ with col_p1:
             fig_pt.savefig(buf_fig_pareto_tramites, format="png")
             buf_fig_pareto_tramites.seek(0)
 
+        # TAB 2: PARETO TIEMPO (NUEVA GRÁFICA)
+        with tab_p_tiempo:
+            fig_time, ax_tm1 = plt.subplots(figsize=(5.5, 3.8))
+            # Convertimos segundos a horas para mejor lectura gráfica
+            horas_trabajo = df_demanda_tiempo['Tiempo_Total_Dia_Seg'] / 3600.0
+            bars_tm = ax_tm1.bar(df_demanda_tiempo['Tipo_Tramite'], horas_trabajo, color='darkorange', alpha=0.8, width=0.4)
+
+            for bar in bars_tm:
+                yval = bar.get_height()
+                ax_tm1.text(bar.get_x() + bar.get_width()/2, yval + (horas_trabajo.max() * 0.02), f"{yval:.1f} hrs", ha='center', va='bottom', fontsize=8, fontweight='bold')
+
+            ax_tm1.set_ylabel('Horas de Atención Requeridas / Día', fontweight='bold', color='darkorange')
+            ax_tm1.tick_params(axis='y', labelcolor='darkorange')
+
+            ax_tm2 = ax_tm1.twinx()
+            ax_tm2.plot(df_demanda_tiempo['Tipo_Tramite'], df_demanda_tiempo['Acumulado_Pct_Tiempo'], color='crimson', marker='D', ms=5, linewidth=2)
+            ax_tm2.set_ylabel('% Acumulado Tiempo Ocupación', fontweight='bold', color='crimson')
+            ax_tm2.tick_params(axis='y', labelcolor='crimson')
+            ax_tm2.set_ylim(0, 115)
+            ax_tm2.axhline(80, color='gray', linestyle='--', alpha=0.7)
+
+            plt.title("Pareto por Carga de Tiempo de Atención (Cuello de Botella)", fontsize=8.5, fontweight='bold')
+            fig_time.tight_layout()
+            st.pyplot(fig_time)
+
+            buf_fig_pareto_tiempo = BytesIO()
+            fig_time.savefig(buf_fig_pareto_tiempo, format="png")
+            buf_fig_pareto_tiempo.seek(0)
+
+        # TAB 3: TRÁMITES POR HORA
         with tab_p_hora:
-            # Matriz de Trámites x Hora
             fig_th, ax_th = plt.subplots(figsize=(5.5, 3.8))
             bottom_stack = np.zeros(len(df_a_valid))
             
@@ -306,14 +346,14 @@ with col_p1:
             buf_fig_tramite_hora.seek(0)
 
     else:
-        st.info("ℹ️ Complete los datos de Trámites (Paso 2.1) y Arribos para generar la gráfica Pareto de trámites.")
+        st.info("ℹ️ Complete los datos de Trámites (Paso 2.1) y Arribos para generar las gráficas Pareto de trámites.")
 
 with col_p2:
     st.markdown("#### 🔍 Análisis Diagnóstico de Demanda (Paso 2.2)")
     analisis_2_2 = st.text_area(
-        "Redacte su análisis Pareto sobre el volumen de personas por tipo de trámite e impacto en horas pico:",
+        "Redacte su análisis contrastando la saturación por volumen (trámites cortos) vs. el cuello de botella por ocupación (trámites largos):",
         value=st.session_state["ans_2_2"],
-        height=200,
+        height=220,
         key="ans_2_2"
     )
 
@@ -540,23 +580,28 @@ def generar_word():
     add_df_to_doc(df_arribos[df_arribos['Franja_Horaria'] != ""], doc)
 
     if buf_fig_pareto_tramites:
-        doc.add_paragraph("\nLa Figura 3 refleja el Diagrama de Pareto de las personas totales atendidas clasificadas por tipo de trámite diario (aplicando el 80/20 del volumen diario de clientes).")
+        doc.add_paragraph("\nLa Figura 3 refleja el Diagrama de Pareto por volumen de personas (identificando cómo los trámites cortos generan la saturación física de la sala).")
         doc.add_picture(buf_fig_pareto_tramites, width=Inches(5.0))
-        doc.add_paragraph("Figura 3. Diagrama de Pareto de Clientes por Tipo de Trámite.", style='Caption')
+        doc.add_paragraph("Figura 3. Diagrama de Pareto de Clientes por Volumen de Trámite.", style='Caption')
+
+    if buf_fig_pareto_tiempo:
+        doc.add_paragraph("\nLa Figura 4 detalla el Diagrama de Pareto por Carga de Tiempo de Atención (evidenciando que los trámites largos son el principal cuello de botella del personal de ventanilla).")
+        doc.add_picture(buf_fig_pareto_tiempo, width=Inches(5.0))
+        doc.add_paragraph("Figura 4. Diagrama de Pareto de Carga de Trabajo (Horas de Atención).", style='Caption')
 
     if buf_fig_tramite_hora:
-        doc.add_paragraph("\nLa Figura 4 ilustra la distribución acumulada por hora de los tipos de trámites solicitados.")
+        doc.add_paragraph("\nLa Figura 5 ilustra la distribución acumulada por hora de los tipos de trámites solicitados.")
         doc.add_picture(buf_fig_tramite_hora, width=Inches(5.0))
-        doc.add_paragraph("Figura 4. Composición de Trámites por Franja Horaria.", style='Caption')
+        doc.add_paragraph("Figura 5. Composición de Trámites por Franja Horaria.", style='Caption')
 
     p_ans2 = doc.add_paragraph()
     p_ans2.add_run("Análisis de Demanda por Trámite: ").bold = True
     p_ans2.add_run(analisis_2_2 if analisis_2_2 else "No se registraron observaciones.")
 
     if buf_fig_capacidad:
-        doc.add_paragraph("\nLa Figura 5 compara la tasa total de llegada de los clientes frente a la capacidad máxima instalada del sistema de atención en ventanilla.")
+        doc.add_paragraph("\nLa Figura 6 compara la tasa total de llegada de los clientes frente a la capacidad máxima instalada del sistema de atención en ventanilla.")
         doc.add_picture(buf_fig_capacidad, width=Inches(5.0))
-        doc.add_paragraph("Figura 5. Curva de Arribos frente al Umbral de Capacidad Operativa.", style='Caption')
+        doc.add_paragraph("Figura 6. Curva de Arribos frente al Umbral de Capacidad Operativa.", style='Caption')
         
     p_ans3 = doc.add_paragraph()
     p_ans3.add_run("Análisis Diagnóstico de Capacidad: ").bold = True
@@ -570,7 +615,7 @@ def generar_word():
     if imagen_bpmn:
         imagen_bpmn.seek(0)
         doc.add_picture(imagen_bpmn, width=Inches(5.5))
-        doc.add_paragraph("Figura 6. Diagrama BPMN del proceso As-Is.", style='Caption')
+        doc.add_paragraph("Figura 7. Diagrama BPMN del proceso As-Is.", style='Caption')
 
     doc.add_heading('Tabla 3. Descripción de Etapas del Proceso', level=2)
     add_df_to_doc(df_bpmn[df_bpmn['Nombre_Etapa'] != ""], doc)
@@ -580,10 +625,10 @@ def generar_word():
     add_df_to_doc(df_params[df_params['Nombre_Etapa'] != ""], doc)
     
     if imagen_flexsim:
-        doc.add_paragraph("\nLa Figura 7 muestra la construcción física (Layout) del modelo dentro del entorno virtual.")
+        doc.add_paragraph("\nLa Figura 8 muestra la construcción física (Layout) del modelo dentro del entorno virtual.")
         imagen_flexsim.seek(0)
         doc.add_picture(imagen_flexsim, width=Inches(5.5))
-        doc.add_paragraph("Figura 7. Layout y entorno 3D del Gemelo Digital en FlexSim.", style='Caption')
+        doc.add_paragraph("Figura 8. Layout y entorno 3D del Gemelo Digital en FlexSim.", style='Caption')
     
     p_notas = doc.add_paragraph()
     p_notas.add_run("Observaciones sobre la construcción del modelo: ").bold = True
@@ -601,11 +646,11 @@ def generar_word():
     if imagen_sim_corrida:
         imagen_sim_corrida.seek(0)
         doc.add_picture(imagen_sim_corrida, width=Inches(5))
-        doc.add_paragraph("Figura 8. Ejecución del Gemelo Digital en tiempo real.", style='Caption')
+        doc.add_paragraph("Figura 9. Ejecución del Gemelo Digital en tiempo real.", style='Caption')
     if imagen_dashboard_kpi:
         imagen_dashboard_kpi.seek(0)
         doc.add_picture(imagen_dashboard_kpi, width=Inches(5))
-        doc.add_paragraph("Figura 9. Dashboard estadístico obtenido en FlexSim.", style='Caption')
+        doc.add_paragraph("Figura 10. Dashboard estadístico obtenido en FlexSim.", style='Caption')
         
     doc.add_paragraph("\nLa Tabla 6 consolida las desviaciones halladas entre la teoría y la simulación y activa los semáforos de advertencia.")
     doc.add_heading('Tabla 6. Triangulación y Evaluación de KPIs', level=2)
