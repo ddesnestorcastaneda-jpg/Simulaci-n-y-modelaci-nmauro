@@ -48,7 +48,15 @@ default_keys = {
     "txt_flexsim": "",
     "diagnostico_equipo": "",
     "recomendaciones_equipo": "",
-    "tipo_g1": "Barras Simples"
+    "tipo_g1": "Barras Simples",
+    # Nuevas llaves para la valoración del aprendizaje
+    "eval_matematica": 3,
+    "eval_flexsim": 3,
+    "eval_triangulacion": 3,
+    "eval_sistemico": 3,
+    "reflexion_aprensizaje": "",
+    "dificultades_superadas": "",
+    "aplicaciones_futuras": ""
 }
 for k, v in default_keys.items():
     if k not in st.session_state:
@@ -292,10 +300,9 @@ with col_p1:
             fig_pt.savefig(buf_fig_pareto_tramites, format="png")
             buf_fig_pareto_tramites.seek(0)
 
-        # TAB 2: PARETO TIEMPO (NUEVA GRÁFICA)
+        # TAB 2: PARETO TIEMPO
         with tab_p_tiempo:
             fig_time, ax_tm1 = plt.subplots(figsize=(5.5, 3.8))
-            # Convertimos segundos a horas para mejor lectura gráfica
             horas_trabajo = df_demanda_tiempo['Tiempo_Total_Dia_Seg'] / 3600.0
             bars_tm = ax_tm1.bar(df_demanda_tiempo['Tipo_Tramite'], horas_trabajo, color='darkorange', alpha=0.8, width=0.4)
 
@@ -497,6 +504,65 @@ recomendaciones_equipo = st.text_area("Propuestas y Recomendaciones de Intervenc
 st.markdown("---")
 
 # ------------------------------------------------------------------------------
+# BLOQUE 6: VALORACIÓN DEL APRENDIZAJE Y CIERRE DE COMPETENCIAS (NUEVO)
+# ------------------------------------------------------------------------------
+st.header("🎓 Bloque 6: Valoración del Aprendizaje y Cierre de Competencias")
+st.markdown(
+    "Esta sección permite al equipo reflexionar sobre el proceso de consultoría, "
+    "autoevaluar el desarrollo de sus competencias técnicas y consolidar las lecciones aprendidas."
+)
+
+st.subheader("6.1 Autoevaluación de Competencias Adquiridas")
+st.caption("Califique en una escala de 1 (Inicial) a 5 (Dominio Alto) el nivel alcanzado en cada competencia:")
+
+col_comp1, col_comp2 = st.columns(2)
+
+with col_comp1:
+    eval_matematica = st.slider(
+        "1. Modelamiento Matemático y Analítico (Teoría de Colas, Variabilidad y Capacidad):",
+        min_value=1, max_value=5, value=int(st.session_state["eval_matematica"]), key="eval_matematica"
+    )
+    eval_flexsim = st.slider(
+        "2. Construcción de Gemelo Digital (Layout, Reglas de Ruteo y Parametrización en FlexSim):",
+        min_value=1, max_value=5, value=int(st.session_state["eval_flexsim"]), key="eval_flexsim"
+    )
+
+with col_comp2:
+    eval_triangulacion = st.slider(
+        "3. Triangulación e Interpretación de Datos (Modelo Teórico vs. Simulación Dinámica):",
+        min_value=1, max_value=5, value=int(st.session_state["eval_triangulacion"]), key="eval_triangulacion"
+    )
+    eval_sistemico = st.slider(
+        "4. Pensamiento Sistémico y Propuesta de Soluciones (Diseño de Escenarios To-Be):",
+        min_value=1, max_value=5, value=int(st.session_state["eval_sistemico"]), key="eval_sistemico"
+    )
+
+st.subheader("6.2 Preguntas de Cierre y Reflexión Metacognitiva")
+
+reflexion_aprensizaje = st.text_area(
+    "💬 1. Principales Aprendizajes: ¿Cuál fue el hallazgo más sorprendente al comparar los cálculos teóricos promedio frente al Gemelo Digital en FlexSim?",
+    value=st.session_state["reflexion_aprensizaje"],
+    height=120,
+    key="reflexion_aprensizaje"
+)
+
+dificultades_superadas = st.text_area(
+    "🛠️ 2. Retos y Dificultades: ¿Qué obstáculos técnicos o conceptuales enfrentó el equipo durante el modelamiento y cómo los superaron?",
+    value=st.session_state["dificultades_superadas"],
+    height=120,
+    key="dificultades_superadas"
+)
+
+aplicaciones_futuras = st.text_area(
+    "🚀 3. Transferencia y Aplicación: ¿Cómo aplicaría esta metodología de Gemelo Digital en otros procesos industriales o de servicios?",
+    value=st.session_state["aplicaciones_futuras"],
+    height=120,
+    key="aplicaciones_futuras"
+)
+
+st.markdown("---")
+
+# ------------------------------------------------------------------------------
 # BOTÓN DE GUARDADO EN JSON
 # ------------------------------------------------------------------------------
 datos_a_guardar = {
@@ -512,7 +578,15 @@ datos_a_guardar = {
     "txt_flexsim": st.session_state.get("txt_flexsim", ""),
     "diagnostico_equipo": st.session_state.get("diagnostico_equipo", ""),
     "recomendaciones_equipo": st.session_state.get("recomendaciones_equipo", ""),
-    "tipo_g1": st.session_state.get("tipo_g1", "Barras Simples")
+    "tipo_g1": st.session_state.get("tipo_g1", "Barras Simples"),
+    # Guardar respuestas del Bloque 6
+    "eval_matematica": st.session_state.get("eval_matematica", 3),
+    "eval_flexsim": st.session_state.get("eval_flexsim", 3),
+    "eval_triangulacion": st.session_state.get("eval_triangulacion", 3),
+    "eval_sistemico": st.session_state.get("eval_sistemico", 3),
+    "reflexion_aprensizaje": st.session_state.get("reflexion_aprensizaje", ""),
+    "dificultades_superadas": st.session_state.get("dificultades_superadas", ""),
+    "aplicaciones_futuras": st.session_state.get("aplicaciones_futuras", "")
 }
 json_data = json.dumps(datos_a_guardar, indent=4, ensure_ascii=False)
 
@@ -524,10 +598,10 @@ st.sidebar.download_button(
 )
 
 # ------------------------------------------------------------------------------
-# BLOQUE 6: GENERACIÓN DE DOCUMENTO WORD
+# BLOQUE 7: GENERACIÓN DE DOCUMENTO WORD CONSOLIDADO
 # ------------------------------------------------------------------------------
-st.header("📄 Bloque 6: Exportación de Informe Final")
-st.info("Haga clic en el botón inferior para generar y descargar un documento de Word (.docx) que consolida, numera y parafrasea automáticamente todas las tablas, gráficas y análisis redactados.")
+st.header("📄 Exportación de Informe Final")
+st.info("Haga clic en el botón inferior para generar y descargar un documento de Word (.docx) que consolida todas las tablas, gráficas, diagnósticos y la autoevaluación del aprendizaje.")
 
 def add_df_to_doc(df, doc):
     t = doc.add_table(df.shape[0]+1, df.shape[1])
@@ -665,6 +739,41 @@ def generar_word():
     p_rec = doc.add_paragraph()
     p_rec.add_run("\nRecomendaciones de Mejora Continua: ").bold = True
     p_rec.add_run(recomendaciones_equipo if recomendaciones_equipo else "No se registraron propuestas.")
+
+    # SECCIÓN 5: VALORACIÓN DEL APRENDIZAJE (NUEVO EN WORD)
+    doc.add_page_break()
+    doc.add_heading('5. Valoración del Aprendizaje y Autoevaluación de Competencias', level=1)
+    doc.add_paragraph("A continuación, se consolidan las calificaciones obtenidas por el equipo consultor en la autoevaluación de competencias desarrolladas durante el proyecto:")
+    
+    df_eval_doc = pd.DataFrame({
+        "Competencia Analizada": [
+            "Modelamiento Matemático y Analítico",
+            "Construcción de Gemelo Digital (FlexSim)",
+            "Triangulación e Interpretación de Datos",
+            "Pensamiento Sistémico y Propuestas To-Be"
+        ],
+        "Calificación (1 a 5)": [
+            f"{eval_matematica} / 5",
+            f"{eval_flexsim} / 5",
+            f"{eval_triangulacion} / 5",
+            f"{eval_sistemico} / 5"
+        ]
+    })
+    add_df_to_doc(df_eval_doc, doc)
+
+    doc.add_paragraph("\nReflexión Metacognitiva del Equipo:")
+    
+    p_ref1 = doc.add_paragraph()
+    p_ref1.add_run("• Principales Aprendizajes: ").bold = True
+    p_ref1.add_run(reflexion_aprensizaje if reflexion_aprensizaje else "No se registraron comentarios.")
+
+    p_ref2 = doc.add_paragraph()
+    p_ref2.add_run("• Retos y Dificultades Superadas: ").bold = True
+    p_ref2.add_run(dificultades_superadas if dificultades_superadas else "No se registraron comentarios.")
+
+    p_ref3 = doc.add_paragraph()
+    p_ref3.add_run("• Transferencia y Aplicabilidad Futura: ").bold = True
+    p_ref3.add_run(aplicaciones_futuras if aplicaciones_futuras else "No se registraron comentarios.")
     
     bio = BytesIO()
     doc.save(bio)
@@ -672,8 +781,8 @@ def generar_word():
     return bio
 
 st.download_button(
-    label="📥 Generar y Descargar Documento Word (.docx)",
+    label="📥 Generar y Descargar Documento Word Completo (.docx)",
     data=generar_word(),
-    file_name="Informe_Consultoria_Bitacora.docx",
+    file_name="Informe_Consultoria_Bitacora_Completo.docx",
     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 )
