@@ -13,14 +13,20 @@ st.caption("Herramienta de Recolección de Datos, Mapeo, Parametrización, Simul
 st.markdown("---")
 
 # ------------------------------------------------------------------------------
-# BLOQUE 1: REGISTRO DEL EQUIPO
+# BLOQUE 1: REGISTRO DEL EQUIPO (CON CORREOS ELECTRÓNICOS)
 # ------------------------------------------------------------------------------
 st.header("📋 Bloque 1: Datos del Equipo Consultor")
 col_e1, col_e2 = st.columns(2)
+
 with col_e1:
-    estudiante1 = st.text_input("Nombre Estudiante 1", placeholder="Ingrese nombre completo...")
+    st.subheader("Estudiante 1")
+    estudiante1 = st.text_input("Nombre Estudiante 1", placeholder="Ingrese nombre completo...", key="est1_nombre")
+    email1 = st.text_input("Correo Electrónico 1", placeholder="ejemplo@correo.com", key="est1_email")
+
 with col_e2:
-    estudiante2 = st.text_input("Nombre Estudiante 2", placeholder="Ingrese nombre completo...")
+    st.subheader("Estudiante 2")
+    estudiante2 = st.text_input("Nombre Estudiante 2", placeholder="Ingrese nombre completo...", key="est2_nombre")
+    email2 = st.text_input("Correo Electrónico 2", placeholder="ejemplo@correo.com", key="est2_email")
 
 st.markdown("---")
 
@@ -231,9 +237,17 @@ def generar_word():
     doc = Document()
     doc.add_heading('Informe Técnico de Consultoría - Diagnóstico Operativo y Gemelo Digital', 0)
     
+    # ENCABEZADO DE INTEGRANTES Y CORREOS
     p_equipo = doc.add_paragraph()
-    p_equipo.add_run('Equipo Consultor: ').bold = True
-    p_equipo.add_run(f'{estudiante1 if estudiante1 else "No registrado"} - {estudiante2 if estudiante2 else "No registrado"}')
+    p_equipo.add_run('Equipo Consultor:\n').bold = True
+    
+    nom1 = estudiante1 if estudiante1 else "No registrado"
+    em1 = f" ({email1})" if email1 else ""
+    p_equipo.add_run(f'• Estudiante 1: {nom1}{em1}\n')
+    
+    nom2 = estudiante2 if estudiante2 else "No registrado"
+    em2 = f" ({email2})" if email2 else ""
+    p_equipo.add_run(f'• Estudiante 2: {nom2}{em2}')
     
     # SECCIÓN 1
     doc.add_heading('1. Diagnóstico Operativo del Sistema Actual (As-Is)', level=1)
