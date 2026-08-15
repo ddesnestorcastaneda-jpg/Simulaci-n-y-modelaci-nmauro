@@ -105,7 +105,7 @@ st.subheader("Paso 2.1: Mezcla de Trámites, Tiempos de Atención y Autorizació
 df_tramites_init = pd.DataFrame({
     "ID": [1, 2, 3, 4],
     "Tipo_Tramite": ["Tipico", "Pesada", "Largos", ""],
-    "Mezcla_Pct": [50.0, 20.0, 10.0, 0.0],
+    "Mezcla_Pct": [50.0, 30.0, 20.0, 0.0],
     "Tiempo_Atencion_Seg": [120.0, 400.0, 2000.0, 0.0],
     "Prob_Autorizacion": [0.0, 30.0, 35.0, 0.0]
 })
@@ -113,13 +113,18 @@ df_tramites = st.data_editor(df_tramites_init, num_rows="dynamic", use_container
 
 df_t_valid = df_tramites[df_tramites['Tipo_Tramite'] != ""].copy()
 
+# Validación visual sobre la suma del 100% de la mezcla
+suma_mezcla = df_t_valid['Mezcla_Pct'].sum()
+if not df_t_valid.empty and abs(suma_mezcla - 100.0) > 0.01:
+    st.warning(f"⚠️ Atención: La suma de la mezcla de trámites actual es **{suma_mezcla:.1f}%**. Debe sumar el **100%** para un análisis correcto.")
+
 buf_fig1_tiempos = None
 buf_fig1_prob = None
 
 if not df_t_valid.empty and df_t_valid['Tiempo_Atencion_Seg'].sum() > 0:
     col_g1, col_g2 = st.columns(2)
     
-    # --- GRÁFICA 1: TIEMPOS DE ATENCIÓN (CON SELECCIÓN INTERACTIVA) ---
+    # --- GRÁFICA 1: TIEMPOS Y PORCENTAJE DE MEZCLA POR TRÁMITE ---
     with col_g1:
         tipo_grafica_1 = st.radio(
             "Seleccione el tipo de gráfica para Tiempos:",
@@ -129,36 +134,59 @@ if not df_t_valid.empty and df_t_valid['Tiempo_Atencion_Seg'].sum() > 0:
         )
         
         df_bars = df_t_valid.sort_values(by='Tiempo_Atencion_Seg', ascending=False).reset_index(drop=True)
+        
+        # Crear etiquetas personalizadas para el eje X que incluyan Nombre y % Mezcla
+        etiquetas_x = [f"{row['Tipo_Tramite']}\n({row['Mezcla_Pct']:.0f}%)" for _, row in df_bars.iterrows()]
+        
         fig_t, ax_t = plt.subplots(figsize=(5, 3.8))
         
         if tipo_grafica_1 == "Barras Simples":
-            bars1 = ax_t.bar(df_bars['Tipo_Tramite'], df_bars['Tiempo_Atencion_Seg'], color='steelblue', alpha=0.8, width=0.4)
-            for bar in bars1:
+            bars1 = ax_t.bar(etiquetas_x, df_bars['Tiempo_Atencion_Seg'], color='steelblue', alpha=0.8, width=0.4)
+            
+            # Etiqueta sobre cada barra: Tiempo en segundos + Porcentaje
+            for bar, (_, row) in zip(bars1, df_bars.iterrows()):
                 yval = bar.get_height()
-                ax_t.text(bar.get_x() + bar.get_width()/2, yval + (df_bars['Tiempo_Atencion_Seg'].max()*0.02), f"{yval:.0f}s", ha='center', va='bottom', fontsize=9)
+                pct = row['Mezcla_Pct']
+                ax_t.text(
+                    bar.get_x() + bar.get_width()/2,
+                    yval + (df_bars['Tiempo_Atencion_Seg'].max() * 0.02),
+                    f"{yval:.0f}s ({pct:.0f}%)",
+                    ha='center', va='bottom', fontsize=8.5, fontweight='bold'
+                )
 
             ax_t.set_ylabel('Tiempo Atención (seg)', fontweight='bold')
-            ax_t.set_xlabel('Tipo de Trámite', fontweight='bold')
-            ax_t.set_ylim(0, df_bars['Tiempo_Atencion_Seg'].max() * 1.15)
-            plt.xticks(rotation=15)
-            plt.title("Tiempos de Atención por Trámite", fontsize=10, fontweight='bold')
+            ax_t.set_xlabel('Trámite (% Mezcla)', fontweight='bold')
+            ax_t.set_ylim(0, df_bars['Tiempo_Atencion_Seg'].max() * 1.18)
+            plt.xticks(rotation=0)
+            plt.title("Tiempo de Atención y Participación (%) por Trámite", fontsize=9.5, fontweight='bold')
             
         else:  # Diagrama de Pareto
             df_bars['Acumulado_Pct'] = (df_bars['Tiempo_Atencion_Seg'].cumsum() / df_bars['Tiempo_Atencion_Seg'].sum()) * 100
             
-            bars1 = ax_t.bar(df_bars['Tipo_Tramite'], df_bars['Tiempo_Atencion_Seg'], color='steelblue', alpha=0.8, width=0.4)
+            bars1 = ax_t.bar(etiquetas_x, df_bars['Tiempo_Atencion_Seg'], color='steelblue', alpha=0.8, width=0.4)
             ax_t.set_ylabel('Tiempo Atención (seg)', fontweight='bold', color='steelblue')
             ax_t.tick_params(axis='y', labelcolor='steelblue')
             
+            # Añadir etiqueta con tiempo y % en las barras del Pareto también
+            for bar, (_, row) in zip(bars1, df_bars.iterrows()):
+                yval = bar.get_height()
+                pct = row['Mezcla_Pct']
+                ax_t.text(
+                    bar.get_x() + bar.get_width()/2,
+                    yval + (df_bars['Tiempo_Atencion_Seg'].max() * 0.02),
+                    f"{yval:.0f}s ({pct:.0f}%)",
+                    ha='center', va='bottom', fontsize=8, fontweight='bold'
+                )
+            
             ax_t2 = ax_t.twinx()
-            ax_t2.plot(df_bars['Tipo_Tramite'], df_bars['Acumulado_Pct'], color='crimson', marker='D', ms=5, linewidth=2)
-            ax_t2.set_ylabel('% Acumulado', fontweight='bold', color='crimson')
+            ax_t2.plot(etiquetas_x, df_bars['Acumulado_Pct'], color='crimson', marker='D', ms=5, linewidth=2)
+            ax_t2.set_ylabel('% Acumulado Tiempos', fontweight='bold', color='crimson')
             ax_t2.tick_params(axis='y', labelcolor='crimson')
-            ax_t2.set_ylim(0, 110)
+            ax_t2.set_ylim(0, 115)
             ax_t2.axhline(80, color='gray', linestyle='--', alpha=0.7)
             
-            plt.xticks(rotation=15)
-            plt.title("Pareto de Tiempos de Atención", fontsize=10, fontweight='bold')
+            plt.xticks(rotation=0)
+            plt.title("Pareto de Tiempos con Mezcla (%)", fontsize=9.5, fontweight='bold')
 
         fig_t.tight_layout()
         st.pyplot(fig_t)
@@ -396,15 +424,15 @@ def generar_word():
     
     # SECCIÓN 1
     doc.add_heading('1. Diagnóstico Operativo del Sistema Actual (As-Is)', level=1)
-    doc.add_paragraph("Para comprender la situación actual del sistema, se analizó inicialmente el catálogo de servicios. La Tabla 1 consolida los tipos de trámites identificados, su participación porcentual ideal de mezcla, el tiempo estimado y el porcentaje de autorización.")
+    doc.add_paragraph("Para comprender la situación actual del sistema, se analizó inicialmente el catálogo de servicios. La Tabla 1 consolida los tipos de trámites identificados, su participación porcentual ideal de mezcla (cuya suma equivale al 100% de la demanda), el tiempo estimado y el porcentaje de autorización.")
     
     doc.add_heading('Tabla 1. Mezcla de Trámites, Tiempos Estándar y Autorizaciones', level=2)
     add_df_to_doc(df_tramites[df_tramites['Tipo_Tramite'] != ""], doc)
     
     if buf_fig1_tiempos:
-        doc.add_paragraph("\nLa Figura 1 presenta visualmente la comparación de los tiempos de atención requeridos para cada tipo de trámite.")
+        doc.add_paragraph("\nLa Figura 1 presenta visualmente los tiempos de atención por trámite integrando la proporción porcentual (%) que cada uno representa dentro de la mezcla total.")
         doc.add_picture(buf_fig1_tiempos, width=Inches(5.0))
-        doc.add_paragraph(f"Figura 1. Visualización de Tiempos de Atención por Trámite ({st.session_state.get('tipo_g1', 'Barras Simples')}).", style='Caption')
+        doc.add_paragraph(f"Figura 1. Tiempos de Atención y Porcentaje de Mezcla ({st.session_state.get('tipo_g1', 'Barras Simples')}).", style='Caption')
 
     if buf_fig1_prob:
         doc.add_paragraph("\nLa Figura 2 detalla la tasa o probabilidad de autorización correspondiente a cada tipo de trámite.")
