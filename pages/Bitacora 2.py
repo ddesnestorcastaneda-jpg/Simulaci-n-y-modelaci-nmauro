@@ -22,7 +22,6 @@ st.sidebar.info(
     "actual para continuar desde casa."
 )
 
-# 1. Cargador de JSON
 archivo_json_cargado = st.sidebar.file_uploader(
     "📂 Cargar Avance Guardado (.json)", type=["json"], key="uploader_json"
 )
@@ -36,7 +35,6 @@ if archivo_json_cargado is not None:
     except Exception as e:
         st.sidebar.error("Error al procesar el archivo JSON.")
 
-# Inicialización de llaves por defecto en session_state si no existen
 default_keys = {
     "est1_nombre": "",
     "est1_email": "",
@@ -48,7 +46,8 @@ default_keys = {
     "link_bpmn": "",
     "txt_flexsim": "",
     "diagnostico_equipo": "",
-    "recomendaciones_equipo": ""
+    "recomendaciones_equipo": "",
+    "tipo_g1": "Barras Simples"
 }
 for k, v in default_keys.items():
     if k not in st.session_state:
@@ -59,7 +58,7 @@ st.caption("Herramienta de Recolección de Datos, Mapeo, Parametrización, Simul
 st.markdown("---")
 
 # ------------------------------------------------------------------------------
-# BLOQUE 1: REGISTRO DEL EQUIPO (CON CORREOS ELECTRÓNICOS)
+# BLOQUE 1: REGISTRO DEL EQUIPO
 # ------------------------------------------------------------------------------
 st.header("📋 Bloque 1: Datos del Equipo Consultor")
 col_e1, col_e2 = st.columns(2)
@@ -114,45 +113,67 @@ df_tramites = st.data_editor(df_tramites_init, num_rows="dynamic", use_container
 
 df_t_valid = df_tramites[df_tramites['Tipo_Tramite'] != ""].copy()
 
-buf_fig1_pareto = None
+buf_fig1_tiempos = None
 buf_fig1_prob = None
 
 if not df_t_valid.empty and df_t_valid['Tiempo_Atencion_Seg'].sum() > 0:
     col_g1, col_g2 = st.columns(2)
     
-    # --- GRÁFICA 1: PARETO DE TIEMPOS DE ATENCIÓN ---
+    # --- GRÁFICA 1: TIEMPOS DE ATENCIÓN (CON SELECCIÓN INTERACTIVA) ---
     with col_g1:
-        df_pareto = df_t_valid.sort_values(by='Tiempo_Atencion_Seg', ascending=False).reset_index(drop=True)
-        df_pareto['Acumulado_Pct'] = (df_pareto['Tiempo_Atencion_Seg'].cumsum() / df_pareto['Tiempo_Atencion_Seg'].sum()) * 100
-
-        fig_p, ax_p1 = plt.subplots(figsize=(5, 3.8))
+        tipo_grafica_1 = st.radio(
+            "Seleccione el tipo de gráfica para Tiempos:",
+            ["Barras Simples", "Diagrama de Pareto"],
+            horizontal=True,
+            key="tipo_g1"
+        )
         
-        ax_p1.bar(df_pareto['Tipo_Tramite'], df_pareto['Tiempo_Atencion_Seg'], color='steelblue', alpha=0.8, width=0.4)
-        ax_p1.set_ylabel('Tiempo Atención (seg)', color='steelblue', fontweight='bold')
-        ax_p1.tick_params(axis='y', labelcolor='steelblue')
-        plt.xticks(rotation=15)
+        df_bars = df_t_valid.sort_values(by='Tiempo_Atencion_Seg', ascending=False).reset_index(drop=True)
+        fig_t, ax_t = plt.subplots(figsize=(5, 3.8))
+        
+        if tipo_grafica_1 == "Barras Simples":
+            bars1 = ax_t.bar(df_bars['Tipo_Tramite'], df_bars['Tiempo_Atencion_Seg'], color='steelblue', alpha=0.8, width=0.4)
+            for bar in bars1:
+                yval = bar.get_height()
+                ax_t.text(bar.get_x() + bar.get_width()/2, yval + (df_bars['Tiempo_Atencion_Seg'].max()*0.02), f"{yval:.0f}s", ha='center', va='bottom', fontsize=9)
 
-        ax_p2 = ax_p1.twinx()
-        ax_p2.plot(df_pareto['Tipo_Tramite'], df_pareto['Acumulado_Pct'], color='crimson', marker='D', linewidth=2)
-        ax_p2.axhline(80, color='gray', linestyle='--', alpha=0.7, label='Línea 80%')
-        ax_p2.set_ylabel('% Acumulado', color='crimson', fontweight='bold')
-        ax_p2.set_ylim(0, 110)
-        ax_p2.tick_params(axis='y', labelcolor='crimson')
+            ax_t.set_ylabel('Tiempo Atención (seg)', fontweight='bold')
+            ax_t.set_xlabel('Tipo de Trámite', fontweight='bold')
+            ax_t.set_ylim(0, df_bars['Tiempo_Atencion_Seg'].max() * 1.15)
+            plt.xticks(rotation=15)
+            plt.title("Tiempos de Atención por Trámite", fontsize=10, fontweight='bold')
+            
+        else:  # Diagrama de Pareto
+            df_bars['Acumulado_Pct'] = (df_bars['Tiempo_Atencion_Seg'].cumsum() / df_bars['Tiempo_Atencion_Seg'].sum()) * 100
+            
+            bars1 = ax_t.bar(df_bars['Tipo_Tramite'], df_bars['Tiempo_Atencion_Seg'], color='steelblue', alpha=0.8, width=0.4)
+            ax_t.set_ylabel('Tiempo Atención (seg)', fontweight='bold', color='steelblue')
+            ax_t.tick_params(axis='y', labelcolor='steelblue')
+            
+            ax_t2 = ax_t.twinx()
+            ax_t2.plot(df_bars['Tipo_Tramite'], df_bars['Acumulado_Pct'], color='crimson', marker='D', ms=5, linewidth=2)
+            ax_t2.set_ylabel('% Acumulado', fontweight='bold', color='crimson')
+            ax_t2.tick_params(axis='y', labelcolor='crimson')
+            ax_t2.set_ylim(0, 110)
+            ax_t2.axhline(80, color='gray', linestyle='--', alpha=0.7)
+            
+            plt.xticks(rotation=15)
+            plt.title("Pareto de Tiempos de Atención", fontsize=10, fontweight='bold')
 
-        plt.title("Análisis de Pareto: Tiempos de Atención", fontsize=10, fontweight='bold')
-        fig_p.tight_layout()
-        st.pyplot(fig_p)
+        fig_t.tight_layout()
+        st.pyplot(fig_t)
 
-        buf_fig1_pareto = BytesIO()
-        fig_p.savefig(buf_fig1_pareto, format="png")
-        buf_fig1_pareto.seek(0)
+        buf_fig1_tiempos = BytesIO()
+        fig_t.savefig(buf_fig1_tiempos, format="png")
+        buf_fig1_tiempos.seek(0)
 
     # --- GRÁFICA 2: PROBABILIDAD DE AUTORIZACIÓN ---
     with col_g2:
+        st.markdown("**Porcentaje de Autorizaciones:**")
         fig_pr, ax_pr = plt.subplots(figsize=(5, 3.8))
-        bars = ax_pr.bar(df_t_valid['Tipo_Tramite'], df_t_valid['Prob_Autorizacion'], color='darkseagreen', width=0.4)
+        bars2 = ax_pr.bar(df_t_valid['Tipo_Tramite'], df_t_valid['Prob_Autorizacion'], color='darkseagreen', width=0.4)
         
-        for bar in bars:
+        for bar in bars2:
             yval = bar.get_height()
             ax_pr.text(bar.get_x() + bar.get_width()/2, yval + 1, f"{yval:.1f}%", ha='center', va='bottom', fontsize=9)
 
@@ -160,7 +181,8 @@ if not df_t_valid.empty and df_t_valid['Tiempo_Atencion_Seg'].sum() > 0:
         ax_pr.set_xlabel('Tipo de Trámite', fontweight='bold')
         ax_pr.set_ylim(0, max(df_t_valid['Prob_Autorizacion'].max() + 15, 100))
         plt.xticks(rotation=15)
-        plt.title("Probabilidad / Porcentaje de Autorización", fontsize=10, fontweight='bold')
+        plt.title("Porcentaje de Autorización", fontsize=10, fontweight='bold')
+        
         fig_pr.tight_layout()
         st.pyplot(fig_pr)
 
@@ -170,14 +192,14 @@ if not df_t_valid.empty and df_t_valid['Tiempo_Atencion_Seg'].sum() > 0:
 
     st.markdown("#### 🔍 Análisis Diagnóstico (Paso 2.1)")
     analisis_2_1 = st.text_area(
-        "Redacte su diagnóstico sobre los tiempos (Pareto) y autorizaciones:",
+        "Redacte su diagnóstico sobre los tiempos de atención y autorizaciones de los trámites:",
         value=st.session_state["ans_2_1"],
         height=120,
         key="ans_2_1"
     )
 
 else:
-    st.info("ℹ️ Llene la tabla superior para generar las gráficas de Pareto y Autorizaciones.")
+    st.info("ℹ️ Llene la tabla superior para generar las gráficas de Tiempos y Autorizaciones.")
 
 st.markdown("---")
 
@@ -316,7 +338,7 @@ recomendaciones_equipo = st.text_area("Propuestas y Recomendaciones de Intervenc
 st.markdown("---")
 
 # ------------------------------------------------------------------------------
-# BOTÓN DE GUARDADO EN JSON (DESCARGA DE SEGURIDAD PARA LLEVAR A CASA)
+# BOTÓN DE GUARDADO EN JSON
 # ------------------------------------------------------------------------------
 datos_a_guardar = {
     "est1_nombre": st.session_state.get("est1_nombre", ""),
@@ -329,7 +351,8 @@ datos_a_guardar = {
     "link_bpmn": st.session_state.get("link_bpmn", ""),
     "txt_flexsim": st.session_state.get("txt_flexsim", ""),
     "diagnostico_equipo": st.session_state.get("diagnostico_equipo", ""),
-    "recomendaciones_equipo": st.session_state.get("recomendaciones_equipo", "")
+    "recomendaciones_equipo": st.session_state.get("recomendaciones_equipo", ""),
+    "tipo_g1": st.session_state.get("tipo_g1", "Barras Simples")
 }
 json_data = json.dumps(datos_a_guardar, indent=4, ensure_ascii=False)
 
@@ -373,15 +396,15 @@ def generar_word():
     
     # SECCIÓN 1
     doc.add_heading('1. Diagnóstico Operativo del Sistema Actual (As-Is)', level=1)
-    doc.add_paragraph("Para comprender la situación actual del sistema, se realizó un mapeo de la demanda y de los procesos operativos. La Tabla 1 consolida los tipos de trámites identificados, su participación porcentual, el tiempo requerido y el porcentaje de autorización.")
+    doc.add_paragraph("Para comprender la situación actual del sistema, se analizó inicialmente el catálogo de servicios. La Tabla 1 consolida los tipos de trámites identificados, su participación porcentual ideal de mezcla, el tiempo estimado y el porcentaje de autorización.")
     
     doc.add_heading('Tabla 1. Mezcla de Trámites, Tiempos Estándar y Autorizaciones', level=2)
     add_df_to_doc(df_tramites[df_tramites['Tipo_Tramite'] != ""], doc)
     
-    if buf_fig1_pareto:
-        doc.add_paragraph("\nLa Figura 1 presenta un análisis de Pareto que jerarquiza los trámites según el impacto de su tiempo de atención en la capacidad operativa.")
-        doc.add_picture(buf_fig1_pareto, width=Inches(5.0))
-        doc.add_paragraph("Figura 1. Diagrama de Pareto de Tiempos de Atención.", style='Caption')
+    if buf_fig1_tiempos:
+        doc.add_paragraph("\nLa Figura 1 presenta visualmente la comparación de los tiempos de atención requeridos para cada tipo de trámite.")
+        doc.add_picture(buf_fig1_tiempos, width=Inches(5.0))
+        doc.add_paragraph(f"Figura 1. Visualización de Tiempos de Atención por Trámite ({st.session_state.get('tipo_g1', 'Barras Simples')}).", style='Caption')
 
     if buf_fig1_prob:
         doc.add_paragraph("\nLa Figura 2 detalla la tasa o probabilidad de autorización correspondiente a cada tipo de trámite.")
@@ -392,7 +415,7 @@ def generar_word():
     p_ans1.add_run("Análisis Diagnóstico de Trámites: ").bold = True
     p_ans1.add_run(analisis_2_1 if analisis_2_1 else "No se registraron observaciones.")
     
-    doc.add_paragraph("\nEn cuanto al flujo de usuarios, la Tabla 2 detalla el perfil de arribos segmentado por franjas horarias, lo que permite identificar los momentos críticos de operación.")
+    doc.add_paragraph("\nPosteriormente, evaluando el flujo real de usuarios, la Tabla 2 detalla el perfil de arribos segmentado por franjas horarias. Es en este cruce de demanda versus el catálogo de servicios donde se define la carga real de trabajo operativo.")
     doc.add_heading('Tabla 2. Perfil Horario de Arribos y Demanda', level=2)
     add_df_to_doc(df_arribos[df_arribos['Franja_Horaria'] != ""], doc)
     
@@ -408,7 +431,7 @@ def generar_word():
     # SECCIÓN 2
     doc.add_page_break()
     doc.add_heading('2. Diseño y Parametrización del Gemelo Digital (FlexSim)', level=1)
-    doc.add_paragraph(f"El proceso lógico fue estructurado mediante un diagrama BPMN (Enlace de referencia: {link_bpmn if link_bpmn else 'N/A'}). Si bien el diagrama guía la lógica, las etapas específicas que componen el flujo en el simulador se describen detalladamente en la Tabla 3.")
+    doc.add_paragraph(f"El proceso lógico fue estructurado mediante un diagrama BPMN (Enlace de referencia: {link_bpmn if link_bpmn else 'N/A'}). Las etapas específicas que componen el flujo en el simulador se describen detalladamente en la Tabla 3.")
     
     if imagen_bpmn:
         imagen_bpmn.seek(0)
@@ -418,7 +441,7 @@ def generar_word():
     doc.add_heading('Tabla 3. Descripción de Etapas del Proceso', level=2)
     add_df_to_doc(df_bpmn[df_bpmn['Nombre_Etapa'] != ""], doc)
     
-    doc.add_paragraph("\nPara transformar este esquema en un modelo 3D funcional, la Tabla 4 presenta la parametrización técnica ingresada en FlexSim, incluyendo reglas de ruteo, distribuciones estadísticas y asignación de recursos operativos.")
+    doc.add_paragraph("\nLa Tabla 4 presenta la parametrización técnica ingresada en FlexSim, incluyendo reglas de ruteo, distribuciones estadísticas y asignación de recursos operativos.")
     doc.add_heading('Tabla 4. Parámetros Técnicos del Gemelo Digital', level=2)
     add_df_to_doc(df_params[df_params['Nombre_Etapa'] != ""], doc)
     
@@ -450,7 +473,7 @@ def generar_word():
         doc.add_picture(imagen_dashboard_kpi, width=Inches(5))
         doc.add_paragraph("Figura 7. Dashboard estadístico obtenido en FlexSim.", style='Caption')
         
-    doc.add_paragraph("\nLa etapa culminante del análisis radica en la triangulación entre la base matemática teórica y la simulación por eventos discretos. La Tabla 6 consolida las desviaciones halladas y activa los semáforos de advertencia diseñados.")
+    doc.add_paragraph("\nLa Tabla 6 consolida las desviaciones halladas entre la teoría y la simulación y activa los semáforos de advertencia.")
     doc.add_heading('Tabla 6. Triangulación y Evaluación de KPIs', level=2)
     add_df_to_doc(df_triangulacion[df_triangulacion['Indicador_Clave'] != ""], doc)
     
