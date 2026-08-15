@@ -7,16 +7,25 @@ from io import BytesIO
 from docx import Document
 from docx.shared import Inches
 
-st.set_page_config(page_title="Bitácora Digital - Diagnóstico, Gemelo Digital y Simulación", page_icon="📝", layout="wide")
+st.set_page_config(
+    page_title="Bitácora Digital - Diagnóstico, Gemelo Digital y Simulación",
+    page_icon="📝",
+    layout="wide"
+)
 
 # ------------------------------------------------------------------------------
 # MÓDULO DE RECUPERACIÓN Y GUARDADO VÍA JSON
 # ------------------------------------------------------------------------------
 st.sidebar.title("💾 Gestión de Avance (JSON)")
-st.sidebar.info("Sube tu archivo .json previo para restaurar tu trabajo o descarga el estado actual para continuar desde casa.")
+st.sidebar.info(
+    "Sube tu archivo .json previo para restaurar tu trabajo o descarga el estado "
+    "actual para continuar desde casa."
+)
 
 # 1. Cargador de JSON
-archivo_json_cargado = st.sidebar.file_uploader("📂 Cargar Avance Guardado (.json)", type=["json"], key="uploader_json")
+archivo_json_cargado = st.sidebar.file_uploader(
+    "📂 Cargar Avance Guardado (.json)", type=["json"], key="uploader_json"
+)
 
 if archivo_json_cargado is not None:
     try:
@@ -27,12 +36,19 @@ if archivo_json_cargado is not None:
     except Exception as e:
         st.sidebar.error("Error al procesar el archivo JSON.")
 
-# Inicialización de keys si no existen
+# Inicialización de llaves por defecto en session_state si no existen
 default_keys = {
-    "est1_nombre": "", "est1_email": "", "est2_nombre": "", "est2_email": "",
-    "ans_2_1": "", "ans_2_2": "", "cajeros_val": 1,
-    "link_bpmn": "", "txt_flexsim": "",
-    "diagnostico_equipo": "", "recomendaciones_equipo": ""
+    "est1_nombre": "",
+    "est1_email": "",
+    "est2_nombre": "",
+    "est2_email": "",
+    "ans_2_1": "",
+    "ans_2_2": "",
+    "cajeros_val": 1,
+    "link_bpmn": "",
+    "txt_flexsim": "",
+    "diagnostico_equipo": "",
+    "recomendaciones_equipo": ""
 }
 for k, v in default_keys.items():
     if k not in st.session_state:
@@ -50,13 +66,33 @@ col_e1, col_e2 = st.columns(2)
 
 with col_e1:
     st.subheader("Estudiante 1")
-    estudiante1 = st.text_input("Nombre Estudiante 1", value=st.session_state["est1_nombre"], placeholder="Ingrese nombre completo...", key="est1_nombre")
-    email1 = st.text_input("Correo Electrónico 1", value=st.session_state["est1_email"], placeholder="ejemplo@correo.com", key="est1_email")
+    estudiante1 = st.text_input(
+        "Nombre Estudiante 1",
+        value=st.session_state["est1_nombre"],
+        placeholder="Ingrese nombre completo...",
+        key="est1_nombre"
+    )
+    email1 = st.text_input(
+        "Correo Electrónico 1",
+        value=st.session_state["est1_email"],
+        placeholder="ejemplo@correo.com",
+        key="est1_email"
+    )
 
 with col_e2:
     st.subheader("Estudiante 2")
-    estudiante2 = st.text_input("Nombre Estudiante 2", value=st.session_state["est2_nombre"], placeholder="Ingrese nombre completo...", key="est2_nombre")
-    email2 = st.text_input("Correo Electrónico 2", value=st.session_state["est2_email"], placeholder="ejemplo@correo.com", key="est2_email")
+    estudiante2 = st.text_input(
+        "Nombre Estudiante 2",
+        value=st.session_state["est2_nombre"],
+        placeholder="Ingrese nombre completo...",
+        key="est2_nombre"
+    )
+    email2 = st.text_input(
+        "Correo Electrónico 2",
+        value=st.session_state["est2_email"],
+        placeholder="ejemplo@correo.com",
+        key="est2_email"
+    )
 
 st.markdown("---")
 
@@ -65,49 +101,83 @@ st.markdown("---")
 # ------------------------------------------------------------------------------
 st.header("📊 Bloque 2: Digitación de Datos, Visualización y Diagnóstico Operativo (As-Is)")
 
-st.subheader("Paso 2.1: Mezcla de Trámites y Tiempos de Atención")
+st.subheader("Paso 2.1: Mezcla de Trámites, Tiempos de Atención y Autorización")
+
 df_tramites_init = pd.DataFrame({
     "ID": [1, 2, 3, 4],
-    "Tipo_Tramite": ["", "", "", ""],
-    "Mezcla_Pct": [0.0, 0.0, 0.0, 0.0],
-    "Tiempo_Atencion_Seg": [0.0, 0.0, 0.0, 0.0],
-    "Prob_Autorizacion": [0.0, 0.0, 0.0, 0.0]
+    "Tipo_Tramite": ["Tipico", "Pesada", "Largos", ""],
+    "Mezcla_Pct": [50.0, 20.0, 10.0, 0.0],
+    "Tiempo_Atencion_Seg": [120.0, 400.0, 2000.0, 0.0],
+    "Prob_Autorizacion": [0.0, 30.0, 35.0, 0.0]
 })
 df_tramites = st.data_editor(df_tramites_init, num_rows="dynamic", use_container_width=True, key="ed_tramites")
 
-col_g1, col_t1 = st.columns([1.2, 1])
 df_t_valid = df_tramites[df_tramites['Tipo_Tramite'] != ""].copy()
-buf_fig1 = None
 
-with col_g1:
-    if not df_t_valid.empty and df_t_valid['Tiempo_Atencion_Seg'].sum() > 0:
-        fig1, ax1 = plt.subplots(figsize=(6, 4))
-        color = 'tab:blue'
-        ax1.set_xlabel('Tipo de Trámite', fontweight='bold')
-        ax1.set_ylabel('Mezcla (%)', color=color, fontweight='bold')
-        ax1.bar(df_t_valid['Tipo_Tramite'], df_t_valid['Mezcla_Pct'], color=color, alpha=0.5, width=0.4)
-        ax1.tick_params(axis='y', labelcolor=color)
+buf_fig1_pareto = None
+buf_fig1_prob = None
+
+if not df_t_valid.empty and df_t_valid['Tiempo_Atencion_Seg'].sum() > 0:
+    col_g1, col_g2 = st.columns(2)
+    
+    # --- GRÁFICA 1: PARETO DE TIEMPOS DE ATENCIÓN ---
+    with col_g1:
+        df_pareto = df_t_valid.sort_values(by='Tiempo_Atencion_Seg', ascending=False).reset_index(drop=True)
+        df_pareto['Acumulado_Pct'] = (df_pareto['Tiempo_Atencion_Seg'].cumsum() / df_pareto['Tiempo_Atencion_Seg'].sum()) * 100
+
+        fig_p, ax_p1 = plt.subplots(figsize=(5, 3.8))
+        
+        ax_p1.bar(df_pareto['Tipo_Tramite'], df_pareto['Tiempo_Atencion_Seg'], color='steelblue', alpha=0.8, width=0.4)
+        ax_p1.set_ylabel('Tiempo Atención (seg)', color='steelblue', fontweight='bold')
+        ax_p1.tick_params(axis='y', labelcolor='steelblue')
         plt.xticks(rotation=15)
 
-        ax2 = ax1.twinx()  
-        color = 'tab:red'
-        ax2.set_ylabel('Tiempo Atención (seg)', color=color, fontweight='bold')
-        ax2.plot(df_t_valid['Tipo_Tramite'], df_t_valid['Tiempo_Atencion_Seg'], color=color, marker='o', linewidth=2)
-        ax2.tick_params(axis='y', labelcolor=color)
+        ax_p2 = ax_p1.twinx()
+        ax_p2.plot(df_pareto['Tipo_Tramite'], df_pareto['Acumulado_Pct'], color='crimson', marker='D', linewidth=2)
+        ax_p2.axhline(80, color='gray', linestyle='--', alpha=0.7, label='Línea 80%')
+        ax_p2.set_ylabel('% Acumulado', color='crimson', fontweight='bold')
+        ax_p2.set_ylim(0, 110)
+        ax_p2.tick_params(axis='y', labelcolor='crimson')
 
-        plt.title("Mezcla de Demanda vs. Impacto en Tiempo", fontsize=10)
-        fig1.tight_layout()
-        st.pyplot(fig1)
+        plt.title("Análisis de Pareto: Tiempos de Atención", fontsize=10, fontweight='bold')
+        fig_p.tight_layout()
+        st.pyplot(fig_p)
+
+        buf_fig1_pareto = BytesIO()
+        fig_p.savefig(buf_fig1_pareto, format="png")
+        buf_fig1_pareto.seek(0)
+
+    # --- GRÁFICA 2: PROBABILIDAD DE AUTORIZACIÓN ---
+    with col_g2:
+        fig_pr, ax_pr = plt.subplots(figsize=(5, 3.8))
+        bars = ax_pr.bar(df_t_valid['Tipo_Tramite'], df_t_valid['Prob_Autorizacion'], color='darkseagreen', width=0.4)
         
-        buf_fig1 = BytesIO()
-        fig1.savefig(buf_fig1, format="png")
-        buf_fig1.seek(0)
-    else:
-        st.info("ℹ️ Llene la tabla superior para ver la gráfica.")
+        for bar in bars:
+            yval = bar.get_height()
+            ax_pr.text(bar.get_x() + bar.get_width()/2, yval + 1, f"{yval:.1f}%", ha='center', va='bottom', fontsize=9)
 
-with col_t1:
+        ax_pr.set_ylabel('Probabilidad de Autorización (%)', fontweight='bold')
+        ax_pr.set_xlabel('Tipo de Trámite', fontweight='bold')
+        ax_pr.set_ylim(0, max(df_t_valid['Prob_Autorizacion'].max() + 15, 100))
+        plt.xticks(rotation=15)
+        plt.title("Probabilidad / Porcentaje de Autorización", fontsize=10, fontweight='bold')
+        fig_pr.tight_layout()
+        st.pyplot(fig_pr)
+
+        buf_fig1_prob = BytesIO()
+        fig_pr.savefig(buf_fig1_prob, format="png")
+        buf_fig1_prob.seek(0)
+
     st.markdown("#### 🔍 Análisis Diagnóstico (Paso 2.1)")
-    analisis_2_1 = st.text_area("Redacte su diagnóstico sobre los trámites:", value=st.session_state["ans_2_1"], height=200, key="ans_2_1")
+    analisis_2_1 = st.text_area(
+        "Redacte su diagnóstico sobre los tiempos (Pareto) y autorizaciones:",
+        value=st.session_state["ans_2_1"],
+        height=120,
+        key="ans_2_1"
+    )
+
+else:
+    st.info("ℹ️ Llene la tabla superior para generar las gráficas de Pareto y Autorizaciones.")
 
 st.markdown("---")
 
@@ -303,15 +373,20 @@ def generar_word():
     
     # SECCIÓN 1
     doc.add_heading('1. Diagnóstico Operativo del Sistema Actual (As-Is)', level=1)
-    doc.add_paragraph("Para comprender la situación actual del sistema, se realizó un mapeo de la demanda y de los procesos operativos. La Tabla 1 consolida los tipos de trámites identificados, su participación porcentual y el tiempo requerido, evidenciando las fuentes primarias de variabilidad en el servicio.")
+    doc.add_paragraph("Para comprender la situación actual del sistema, se realizó un mapeo de la demanda y de los procesos operativos. La Tabla 1 consolida los tipos de trámites identificados, su participación porcentual, el tiempo requerido y el porcentaje de autorización.")
     
-    doc.add_heading('Tabla 1. Mezcla de Trámites y Tiempos Estándar', level=2)
+    doc.add_heading('Tabla 1. Mezcla de Trámites, Tiempos Estándar y Autorizaciones', level=2)
     add_df_to_doc(df_tramites[df_tramites['Tipo_Tramite'] != ""], doc)
     
-    if buf_fig1:
-        doc.add_paragraph("\nA partir de los datos presentados, la Figura 1 ilustra de manera gráfica el impacto de la variabilidad en los tiempos de atención respecto al volumen de demanda de cada trámite.")
-        doc.add_picture(buf_fig1, width=Inches(5.5))
-        doc.add_paragraph("Figura 1. Histograma de Mezcla de Demanda vs. Tiempos de Atención.", style='Caption')
+    if buf_fig1_pareto:
+        doc.add_paragraph("\nLa Figura 1 presenta un análisis de Pareto que jerarquiza los trámites según el impacto de su tiempo de atención en la capacidad operativa.")
+        doc.add_picture(buf_fig1_pareto, width=Inches(5.0))
+        doc.add_paragraph("Figura 1. Diagrama de Pareto de Tiempos de Atención.", style='Caption')
+
+    if buf_fig1_prob:
+        doc.add_paragraph("\nLa Figura 2 detalla la tasa o probabilidad de autorización correspondiente a cada tipo de trámite.")
+        doc.add_picture(buf_fig1_prob, width=Inches(5.0))
+        doc.add_paragraph("Figura 2. Porcentaje de Autorización por Tipo de Trámite.", style='Caption')
     
     p_ans1 = doc.add_paragraph()
     p_ans1.add_run("Análisis Diagnóstico de Trámites: ").bold = True
@@ -322,9 +397,9 @@ def generar_word():
     add_df_to_doc(df_arribos[df_arribos['Franja_Horaria'] != ""], doc)
     
     if buf_fig2:
-        doc.add_paragraph("\nLa Figura 2 compara la tasa de llegada de los clientes frente a la capacidad máxima instalada del sistema. Esta visualización es clave para detectar cuellos de botella teóricos.")
-        doc.add_picture(buf_fig2, width=Inches(5.5))
-        doc.add_paragraph("Figura 2. Curva de Arribos frente al Umbral de Capacidad Operativa.", style='Caption')
+        doc.add_paragraph("\nLa Figura 3 compara la tasa de llegada de los clientes frente a la capacidad máxima instalada del sistema.")
+        doc.add_picture(buf_fig2, width=Inches(5.0))
+        doc.add_paragraph("Figura 3. Curva de Arribos frente al Umbral de Capacidad Operativa.", style='Caption')
         
     p_ans2 = doc.add_paragraph()
     p_ans2.add_run("Análisis Diagnóstico de Arribos: ").bold = True
@@ -337,8 +412,8 @@ def generar_word():
     
     if imagen_bpmn:
         imagen_bpmn.seek(0)
-        doc.add_picture(imagen_bpmn, width=Inches(6))
-        doc.add_paragraph("Figura 3. Diagrama BPMN del proceso As-Is.", style='Caption')
+        doc.add_picture(imagen_bpmn, width=Inches(5.5))
+        doc.add_paragraph("Figura 4. Diagrama BPMN del proceso As-Is.", style='Caption')
 
     doc.add_heading('Tabla 3. Descripción de Etapas del Proceso', level=2)
     add_df_to_doc(df_bpmn[df_bpmn['Nombre_Etapa'] != ""], doc)
@@ -348,10 +423,10 @@ def generar_word():
     add_df_to_doc(df_params[df_params['Nombre_Etapa'] != ""], doc)
     
     if imagen_flexsim:
-        doc.add_paragraph("\nLa Figura 4 muestra la construcción física (Layout) del modelo dentro del entorno virtual.")
+        doc.add_paragraph("\nLa Figura 5 muestra la construcción física (Layout) del modelo dentro del entorno virtual.")
         imagen_flexsim.seek(0)
-        doc.add_picture(imagen_flexsim, width=Inches(6))
-        doc.add_paragraph("Figura 4. Layout y entorno 3D del Gemelo Digital en FlexSim.", style='Caption')
+        doc.add_picture(imagen_flexsim, width=Inches(5.5))
+        doc.add_paragraph("Figura 5. Layout y entorno 3D del Gemelo Digital en FlexSim.", style='Caption')
     
     p_notas = doc.add_paragraph()
     p_notas.add_run("Observaciones sobre la construcción del modelo: ").bold = True
@@ -369,11 +444,11 @@ def generar_word():
     if imagen_sim_corrida:
         imagen_sim_corrida.seek(0)
         doc.add_picture(imagen_sim_corrida, width=Inches(5))
-        doc.add_paragraph("Figura 5. Ejecución del Gemelo Digital en tiempo real.", style='Caption')
+        doc.add_paragraph("Figura 6. Ejecución del Gemelo Digital en tiempo real.", style='Caption')
     if imagen_dashboard_kpi:
         imagen_dashboard_kpi.seek(0)
         doc.add_picture(imagen_dashboard_kpi, width=Inches(5))
-        doc.add_paragraph("Figura 6. Dashboard estadístico obtenido en FlexSim.", style='Caption')
+        doc.add_paragraph("Figura 7. Dashboard estadístico obtenido en FlexSim.", style='Caption')
         
     doc.add_paragraph("\nLa etapa culminante del análisis radica en la triangulación entre la base matemática teórica y la simulación por eventos discretos. La Tabla 6 consolida las desviaciones halladas y activa los semáforos de advertencia diseñados.")
     doc.add_heading('Tabla 6. Triangulación y Evaluación de KPIs', level=2)
