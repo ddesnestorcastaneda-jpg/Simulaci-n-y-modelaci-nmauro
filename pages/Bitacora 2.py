@@ -42,6 +42,7 @@ default_keys = {
     "est2_email": "",
     "ans_2_1": "",
     "ans_2_2": "",
+    "ans_2_3": "",
     "cajeros_val": 1,
     "link_bpmn": "",
     "txt_flexsim": "",
@@ -100,6 +101,7 @@ st.markdown("---")
 # ------------------------------------------------------------------------------
 st.header("📊 Bloque 2: Digitación de Datos, Visualización y Diagnóstico Operativo (As-Is)")
 
+# PASO 2.1
 st.subheader("Paso 2.1: Mezcla de Trámites, Tiempos de Atención y Autorización")
 
 df_tramites_init = pd.DataFrame({
@@ -123,7 +125,6 @@ buf_fig1_prob = None
 if not df_t_valid.empty and df_t_valid['Tiempo_Atencion_Seg'].sum() > 0:
     col_g1, col_g2 = st.columns(2)
     
-    # --- GRÁFICA 1: TIEMPOS Y PORCENTAJE DE MEZCLA POR TRÁMITE ---
     with col_g1:
         tipo_grafica_1 = st.radio(
             "Seleccione el tipo de gráfica para Tiempos:",
@@ -215,7 +216,7 @@ if not df_t_valid.empty and df_t_valid['Tiempo_Atencion_Seg'].sum() > 0:
     analisis_2_1 = st.text_area(
         "Redacte su diagnóstico sobre los tiempos de atención y autorizaciones de los trámites:",
         value=st.session_state["ans_2_1"],
-        height=120,
+        height=100,
         key="ans_2_1"
     )
 
@@ -224,91 +225,149 @@ else:
 
 st.markdown("---")
 
-# --- PASO 2.2 CON GRÁFICA DE ARRIBOS Y PARETO DE DEMANDA ---
-st.subheader("Paso 2.2: Perfil Horario de Arribos (Demanda)")
+# ------------------------------------------------------------------------------
+# PASO 2.2: ANÁLISIS DE DEMANDA POR TIPO DE TRÁMITE Y PARETO
+# ------------------------------------------------------------------------------
+st.subheader("Paso 2.2: Demanda y Análisis Pareto por Tipo de Trámite")
+
 df_arribos_init = pd.DataFrame({
     "Franja_Horaria": ["8:00 - 9:00", "9:00 - 10:00", "10:00 - 11:00", "11:00 - 12:00", "12:00 - 13:00", "13:00 - 14:00"],
     "Tipo_Perfil": ["Valle", "Pico", "Pico", "Valle", "Valle", "Valle"],
     "Clientes_Hora_Lambda": [15, 45, 50, 20, 15, 10]
 })
 df_arribos = st.data_editor(df_arribos_init, num_rows="dynamic", use_container_width=True, key="ed_arribos")
+
+df_a_valid = df_arribos[df_arribos['Franja_Horaria'] != ""].copy()
+total_clientes_dia = df_a_valid['Clientes_Hora_Lambda'].sum() if not df_a_valid.empty else 0
+
+buf_fig_pareto_tramites = None
+buf_fig_tramite_hora = None
+
+col_p1, col_p2 = st.columns([1.3, 1])
+
+with col_p1:
+    if not df_t_valid.empty and total_clientes_dia > 0:
+        # Calcular total de personas por trámite al día
+        df_demanda_tramites = df_t_valid.copy()
+        df_demanda_tramites['Clientes_Dia'] = (df_demanda_tramites['Mezcla_Pct'] / 100.0) * total_clientes_dia
+        df_demanda_tramites = df_demanda_tramites.sort_values(by='Clientes_Dia', ascending=False).reset_index(drop=True)
+        df_demanda_tramites['Acumulado_Pct'] = (df_demanda_tramites['Clientes_Dia'].cumsum() / df_demanda_tramites['Clientes_Dia'].sum()) * 100.0
+
+        tab_p_dia, tab_p_hora = st.tabs(["📊 Pareto General de Trámites (Día)", "🕒 Demanda de Trámites por Hora"])
+
+        with tab_p_dia:
+            fig_pt, ax_pt1 = plt.subplots(figsize=(5.5, 3.8))
+            bars_pt = ax_pt1.bar(df_demanda_tramites['Tipo_Tramite'], df_demanda_tramites['Clientes_Dia'], color='teal', alpha=0.8, width=0.4)
+
+            for bar in bars_pt:
+                yval = bar.get_height()
+                ax_pt1.text(bar.get_x() + bar.get_width()/2, yval + (df_demanda_tramites['Clientes_Dia'].max() * 0.02), f"{yval:.0f} pers", ha='center', va='bottom', fontsize=8, fontweight='bold')
+
+            ax_pt1.set_ylabel('Total Clientes / Día', fontweight='bold', color='teal')
+            ax_pt1.tick_params(axis='y', labelcolor='teal')
+
+            ax_pt2 = ax_pt1.twinx()
+            ax_pt2.plot(df_demanda_tramites['Tipo_Tramite'], df_demanda_tramites['Acumulado_Pct'], color='crimson', marker='D', ms=5, linewidth=2)
+            ax_pt2.set_ylabel('% Acumulado Personas', fontweight='bold', color='crimson')
+            ax_pt2.tick_params(axis='y', labelcolor='crimson')
+            ax_pt2.set_ylim(0, 115)
+            ax_pt2.axhline(80, color='gray', linestyle='--', alpha=0.7)
+
+            plt.title(f"Pareto de Personas por Tipo de Trámite (Total: {total_clientes_dia} personas/día)", fontsize=9, fontweight='bold')
+            fig_pt.tight_layout()
+            st.pyplot(fig_pt)
+
+            buf_fig_pareto_tramites = BytesIO()
+            fig_pt.savefig(buf_fig_pareto_tramites, format="png")
+            buf_fig_pareto_tramites.seek(0)
+
+        with tab_p_hora:
+            # Matriz de Trámites x Hora
+            fig_th, ax_th = plt.subplots(figsize=(5.5, 3.8))
+            bottom_stack = np.zeros(len(df_a_valid))
+            
+            for _, row_t in df_t_valid.iterrows():
+                tramite_nom = row_t['Tipo_Tramite']
+                pct_t = row_t['Mezcla_Pct'] / 100.0
+                valores_h = df_a_valid['Clientes_Hora_Lambda'] * pct_t
+                ax_th.bar(df_a_valid['Franja_Horaria'], valores_h, bottom=bottom_stack, label=tramite_nom, width=0.45)
+                bottom_stack += valores_h
+
+            ax_th.set_ylabel('Clientes / Hora', fontweight='bold')
+            ax_th.set_xlabel('Franja Horaria', fontweight='bold')
+            plt.xticks(rotation=25)
+            ax_th.legend(title="Trámites", fontsize=8)
+            plt.title("Estimación de Arribos por Trámite en cada Franja Horaria", fontsize=9, fontweight='bold')
+            fig_th.tight_layout()
+            st.pyplot(fig_th)
+
+            buf_fig_tramite_hora = BytesIO()
+            fig_th.savefig(buf_fig_tramite_hora, format="png")
+            buf_fig_tramite_hora.seek(0)
+
+    else:
+        st.info("ℹ️ Complete los datos de Trámites (Paso 2.1) y Arribos para generar la gráfica Pareto de trámites.")
+
+with col_p2:
+    st.markdown("#### 🔍 Análisis Diagnóstico de Demanda (Paso 2.2)")
+    analisis_2_2 = st.text_area(
+        "Redacte su análisis Pareto sobre el volumen de personas por tipo de trámite e impacto en horas pico:",
+        value=st.session_state["ans_2_2"],
+        height=200,
+        key="ans_2_2"
+    )
+
+st.markdown("---")
+
+# ------------------------------------------------------------------------------
+# PASO 2.3: CAPACIDAD DEL SISTEMA VS ARRIBOS
+# ------------------------------------------------------------------------------
+st.subheader("Paso 2.3: Curva de Capacidad del Sistema vs. Arribos")
+
 cajeros = st.number_input("Número de Cajeros Activos en Ventanilla (c):", min_value=1, max_value=20, value=int(st.session_state["cajeros_val"]), key="cajeros_val")
 
-col_g2, col_t2 = st.columns([1.3, 1])
-df_a_valid = df_arribos[df_arribos['Franja_Horaria'] != ""].copy()
+col_c1, col_c2 = st.columns([1.3, 1])
 
-buf_fig2 = None
-buf_fig_pareto_arribos = None
+buf_fig_capacidad = None
 
 if not df_t_valid.empty:
     ts_ponderado_calc = ((df_t_valid['Mezcla_Pct'] / 100) * df_t_valid['Tiempo_Atencion_Seg']).sum()
 else:
     ts_ponderado_calc = 0
 
-with col_g2:
+with col_c1:
     if not df_a_valid.empty and df_a_valid['Clientes_Hora_Lambda'].sum() > 0:
-        tab_cap, tab_pareto = st.tabs(["📈 Curva de Capacidad", "📊 Pareto de Horas Pico"])
+        fig_cap, ax_c = plt.subplots(figsize=(5.5, 3.8))
+        ax_c.plot(df_a_valid['Franja_Horaria'], df_a_valid['Clientes_Hora_Lambda'], marker='o', color='navy', linewidth=2.5, label='Llegadas (λ)')
+        ax_c.fill_between(df_a_valid['Franja_Horaria'], df_a_valid['Clientes_Hora_Lambda'], color='skyblue', alpha=0.3)
+
+        if ts_ponderado_calc > 0:
+            capacidad_sis_calc = (3600 / ts_ponderado_calc) * cajeros
+            ax_c.axhline(y=capacidad_sis_calc, color='red', linestyle='--', linewidth=2, label=f'Capacidad ({cajeros} cajeros)')
+
+        ax_c.set_title("Arribos vs. Umbral de Capacidad Operativa", fontsize=10, fontweight='bold')
+        ax_c.set_xlabel("Franja Horaria", fontweight='bold')
+        ax_c.set_ylabel("Clientes / Hora", fontweight='bold')
+        plt.xticks(rotation=25)
+        ax_c.legend()
+        ax_c.grid(True, linestyle=':', alpha=0.6)
+        fig_cap.tight_layout()
+        st.pyplot(fig_cap)
         
-        # --- TAB 1: CURVA DE CAPACIDAD ---
-        with tab_cap:
-            fig2, ax = plt.subplots(figsize=(5.5, 3.8))
-            ax.plot(df_a_valid['Franja_Horaria'], df_a_valid['Clientes_Hora_Lambda'], marker='o', color='navy', linewidth=2.5)
-            ax.fill_between(df_a_valid['Franja_Horaria'], df_a_valid['Clientes_Hora_Lambda'], color='skyblue', alpha=0.3)
-
-            if ts_ponderado_calc > 0:
-                capacidad_sis_calc = (3600 / ts_ponderado_calc) * cajeros
-                ax.axhline(y=capacidad_sis_calc, color='red', linestyle='--', linewidth=2, label=f'Capacidad ({cajeros} cajeros)')
-
-            ax.set_title("Arribos vs. Umbral de Capacidad", fontsize=10, fontweight='bold')
-            ax.set_xlabel("Franja Horaria", fontweight='bold')
-            ax.set_ylabel("Clientes / Hora", fontweight='bold')
-            plt.xticks(rotation=25)
-            ax.legend()
-            ax.grid(True, linestyle=':', alpha=0.6)
-            fig2.tight_layout()
-            st.pyplot(fig2)
-            
-            buf_fig2 = BytesIO()
-            fig2.savefig(buf_fig2, format="png")
-            buf_fig2.seek(0)
-            
-        # --- TAB 2: DIAGRAMA DE PARETO DE ARRIBOS ---
-        with tab_pareto:
-            df_p_arribos = df_a_valid.sort_values(by='Clientes_Hora_Lambda', ascending=False).reset_index(drop=True)
-            df_p_arribos['Acumulado_Pct'] = (df_p_arribos['Clientes_Hora_Lambda'].cumsum() / df_p_arribos['Clientes_Hora_Lambda'].sum()) * 100
-            
-            fig_pa, ax_pa1 = plt.subplots(figsize=(5.5, 3.8))
-            bars_pa = ax_pa1.bar(df_p_arribos['Franja_Horaria'], df_p_arribos['Clientes_Hora_Lambda'], color='darkslateblue', alpha=0.8, width=0.4)
-            
-            for bar in bars_pa:
-                yval = bar.get_height()
-                ax_pa1.text(bar.get_x() + bar.get_width()/2, yval + (df_p_arribos['Clientes_Hora_Lambda'].max() * 0.02), f"{yval:.0f}", ha='center', va='bottom', fontsize=8, fontweight='bold')
-
-            ax_pa1.set_ylabel('Clientes / Hora', fontweight='bold', color='darkslateblue')
-            ax_pa1.tick_params(axis='y', labelcolor='darkslateblue')
-            
-            ax_pa2 = ax_pa1.twinx()
-            ax_pa2.plot(df_p_arribos['Franja_Horaria'], df_p_arribos['Acumulado_Pct'], color='crimson', marker='D', ms=5, linewidth=2)
-            ax_pa2.set_ylabel('% Acumulado Demanda', fontweight='bold', color='crimson')
-            ax_pa2.tick_params(axis='y', labelcolor='crimson')
-            ax_pa2.set_ylim(0, 115)
-            ax_pa2.axhline(80, color='gray', linestyle='--', alpha=0.7)
-            
-            plt.xticks(rotation=25)
-            plt.title("Pareto de Demanda por Franja Horaria (Regla 80/20)", fontsize=9.5, fontweight='bold')
-            fig_pa.tight_layout()
-            st.pyplot(fig_pa)
-
-            buf_fig_pareto_arribos = BytesIO()
-            fig_pa.savefig(buf_fig_pareto_arribos, format="png")
-            buf_fig_pareto_arribos.seek(0)
-
+        buf_fig_capacidad = BytesIO()
+        fig_cap.savefig(buf_fig_capacidad, format="png")
+        buf_fig_capacidad.seek(0)
     else:
-        st.info("ℹ️ Llene la tabla y parámetros para ver las gráficas de demanda.")
+        st.info("ℹ️ Llene las franjas de arribos para visualizar la curva de capacidad.")
 
-with col_t2:
-    st.markdown("#### 🔍 Análisis Diagnóstico (Paso 2.2)")
-    analisis_2_2 = st.text_area("Redacte su diagnóstico sobre la demanda y horas pico:", value=st.session_state["ans_2_2"], height=200, key="ans_2_2")
+with col_c2:
+    st.markdown("#### 🔍 Análisis Diagnóstico de Capacidad (Paso 2.3)")
+    analisis_2_3 = st.text_area(
+        "Redacte su evaluación sobre si el número de cajeros es suficiente para soportar la tasa de llegadas:",
+        value=st.session_state.get("ans_2_3", ""),
+        height=200,
+        key="ans_2_3"
+    )
 
 st.markdown("---")
 
@@ -407,6 +466,7 @@ datos_a_guardar = {
     "est2_email": st.session_state.get("est2_email", ""),
     "ans_2_1": st.session_state.get("ans_2_1", ""),
     "ans_2_2": st.session_state.get("ans_2_2", ""),
+    "ans_2_3": st.session_state.get("ans_2_3", ""),
     "cajeros_val": st.session_state.get("cajeros_val", 1),
     "link_bpmn": st.session_state.get("link_bpmn", ""),
     "txt_flexsim": st.session_state.get("txt_flexsim", ""),
@@ -475,23 +535,32 @@ def generar_word():
     p_ans1.add_run("Análisis Diagnóstico de Trámites: ").bold = True
     p_ans1.add_run(analisis_2_1 if analisis_2_1 else "No se registraron observaciones.")
     
-    doc.add_paragraph("\nPosteriormente, evaluando el flujo real de usuarios, la Tabla 2 detalla el perfil de arribos segmentado por franjas horarias. Es en este cruce de demanda versus el catálogo de servicios donde se define la carga real de trabajo operativo.")
+    doc.add_paragraph("\nPosteriormente, evaluando el flujo real de usuarios, la Tabla 2 detalla el perfil de arribos segmentado por franjas horarias.")
     doc.add_heading('Tabla 2. Perfil Horario de Arribos y Demanda', level=2)
     add_df_to_doc(df_arribos[df_arribos['Franja_Horaria'] != ""], doc)
-    
-    if buf_fig2:
-        doc.add_paragraph("\nLa Figura 3 compara la tasa de llegada de los clientes frente a la capacidad máxima instalada del sistema.")
-        doc.add_picture(buf_fig2, width=Inches(5.0))
-        doc.add_paragraph("Figura 3. Curva de Arribos frente al Umbral de Capacidad Operativa.", style='Caption')
-        
-    if buf_fig_pareto_arribos:
-        doc.add_paragraph("\nLa Figura 4 muestra el Diagrama de Pareto de la demanda por hora, facilitando la identificación de las franjas críticas (horas pico) que acumulan la mayor carga de usuarios.")
-        doc.add_picture(buf_fig_pareto_arribos, width=Inches(5.0))
-        doc.add_paragraph("Figura 4. Pareto de Demanda Horaria de Clientes.", style='Caption')
-        
+
+    if buf_fig_pareto_tramites:
+        doc.add_paragraph("\nLa Figura 3 refleja el Diagrama de Pareto de las personas totales atendidas clasificadas por tipo de trámite diario (aplicando el 80/20 del volumen diario de clientes).")
+        doc.add_picture(buf_fig_pareto_tramites, width=Inches(5.0))
+        doc.add_paragraph("Figura 3. Diagrama de Pareto de Clientes por Tipo de Trámite.", style='Caption')
+
+    if buf_fig_tramite_hora:
+        doc.add_paragraph("\nLa Figura 4 ilustra la distribución acumulada por hora de los tipos de trámites solicitados.")
+        doc.add_picture(buf_fig_tramite_hora, width=Inches(5.0))
+        doc.add_paragraph("Figura 4. Composición de Trámites por Franja Horaria.", style='Caption')
+
     p_ans2 = doc.add_paragraph()
-    p_ans2.add_run("Análisis Diagnóstico de Arribos: ").bold = True
+    p_ans2.add_run("Análisis de Demanda por Trámite: ").bold = True
     p_ans2.add_run(analisis_2_2 if analisis_2_2 else "No se registraron observaciones.")
+
+    if buf_fig_capacidad:
+        doc.add_paragraph("\nLa Figura 5 compara la tasa total de llegada de los clientes frente a la capacidad máxima instalada del sistema de atención en ventanilla.")
+        doc.add_picture(buf_fig_capacidad, width=Inches(5.0))
+        doc.add_paragraph("Figura 5. Curva de Arribos frente al Umbral de Capacidad Operativa.", style='Caption')
+        
+    p_ans3 = doc.add_paragraph()
+    p_ans3.add_run("Análisis Diagnóstico de Capacidad: ").bold = True
+    p_ans3.add_run(analisis_2_3 if analisis_2_3 else "No se registraron observaciones.")
     
     # SECCIÓN 2
     doc.add_page_break()
@@ -501,7 +570,7 @@ def generar_word():
     if imagen_bpmn:
         imagen_bpmn.seek(0)
         doc.add_picture(imagen_bpmn, width=Inches(5.5))
-        doc.add_paragraph("Figura 5. Diagrama BPMN del proceso As-Is.", style='Caption')
+        doc.add_paragraph("Figura 6. Diagrama BPMN del proceso As-Is.", style='Caption')
 
     doc.add_heading('Tabla 3. Descripción de Etapas del Proceso', level=2)
     add_df_to_doc(df_bpmn[df_bpmn['Nombre_Etapa'] != ""], doc)
@@ -511,10 +580,10 @@ def generar_word():
     add_df_to_doc(df_params[df_params['Nombre_Etapa'] != ""], doc)
     
     if imagen_flexsim:
-        doc.add_paragraph("\nLa Figura 6 muestra la construcción física (Layout) del modelo dentro del entorno virtual.")
+        doc.add_paragraph("\nLa Figura 7 muestra la construcción física (Layout) del modelo dentro del entorno virtual.")
         imagen_flexsim.seek(0)
         doc.add_picture(imagen_flexsim, width=Inches(5.5))
-        doc.add_paragraph("Figura 6. Layout y entorno 3D del Gemelo Digital en FlexSim.", style='Caption')
+        doc.add_paragraph("Figura 7. Layout y entorno 3D del Gemelo Digital en FlexSim.", style='Caption')
     
     p_notas = doc.add_paragraph()
     p_notas.add_run("Observaciones sobre la construcción del modelo: ").bold = True
@@ -532,11 +601,11 @@ def generar_word():
     if imagen_sim_corrida:
         imagen_sim_corrida.seek(0)
         doc.add_picture(imagen_sim_corrida, width=Inches(5))
-        doc.add_paragraph("Figura 7. Ejecución del Gemelo Digital en tiempo real.", style='Caption')
+        doc.add_paragraph("Figura 8. Ejecución del Gemelo Digital en tiempo real.", style='Caption')
     if imagen_dashboard_kpi:
         imagen_dashboard_kpi.seek(0)
         doc.add_picture(imagen_dashboard_kpi, width=Inches(5))
-        doc.add_paragraph("Figura 8. Dashboard estadístico obtenido en FlexSim.", style='Caption')
+        doc.add_paragraph("Figura 9. Dashboard estadístico obtenido en FlexSim.", style='Caption')
         
     doc.add_paragraph("\nLa Tabla 6 consolida las desviaciones halladas entre la teoría y la simulación y activa los semáforos de advertencia.")
     doc.add_heading('Tabla 6. Triangulación y Evaluación de KPIs', level=2)
